@@ -1,0 +1,162 @@
+//@version=6
+// Hoffmeister Candles — sobrepõe velas de outros timeframes no gráfico atual.
+// Indicador separado do "Hoffmeister ICT Lab" (ocupa o 2º slot do plano free do TV).
+// 5 slots independentes; o timeframe de cada slot é livre (input.timeframe), não fixo.
+indicator("Hoffmeister Candles", overlay = true, max_boxes_count = 500, max_lines_count = 500)
+
+// ---------------------
+// Função genérica de desenho (1 slot)
+// ---------------------
+f_drawTf(tfCode, showFlag, showFromTF, showToTF, maxCandles, bodyBull, bodyBear, borderBull, borderBear, borderW, wickBull, wickBear, wickW, refBodies, refWicks) =>
+    if showFlag
+        curTF = timeframe.in_seconds(timeframe.period)
+        minTF = timeframe.in_seconds(showFromTF)
+        maxTF = timeframe.in_seconds(showToTF)
+        isVisible = (curTF >= minTF and curTF <= maxTF)
+
+        [htOpen, htHigh, htLow, htClose, htTime, htCloseTime] = request.security(syminfo.tickerid, tfCode, [open, high, low, close, time, time_close], lookahead = barmerge.lookahead_off)
+
+        newCandle = htTime != htTime[1]
+
+        bodyHigh = math.max(htOpen, htClose)
+        bodyLow  = math.min(htOpen, htClose)
+        isBull   = htClose >= htOpen
+        bodyColor   = isBull ? bodyBull : bodyBear
+        borderColor = isBull ? borderBull : borderBear
+        wickColor   = isBull ? wickBull : wickBear
+
+        if isVisible and newCandle
+            b = box.new(left = htTime, top = bodyHigh, right = htCloseTime, bottom = bodyLow, xloc = xloc.bar_time, bgcolor = bodyColor, border_color = borderColor, border_width = borderW)
+            array.unshift(refBodies, b)
+
+            wh = line.new(x1 = (htTime + htCloseTime) / 2, y1 = htHigh, x2 = (htTime + htCloseTime) / 2, y2 = bodyHigh, xloc = xloc.bar_time, color = wickColor, width = wickW)
+            wl = line.new(x1 = (htTime + htCloseTime) / 2, y1 = bodyLow, x2 = (htTime + htCloseTime) / 2, y2 = htLow, xloc = xloc.bar_time, color = wickColor, width = wickW)
+            array.unshift(refWicks, wh)
+            array.unshift(refWicks, wl)
+
+        else if isVisible and not newCandle and array.size(refBodies) > 0
+            box.set_top(array.get(refBodies, 0), bodyHigh)
+            box.set_bottom(array.get(refBodies, 0), bodyLow)
+            box.set_bgcolor(array.get(refBodies, 0), bodyColor)
+            box.set_border_color(array.get(refBodies, 0), borderColor)
+            if array.size(refWicks) >= 2
+                line.set_xy1(array.get(refWicks, 1), (htTime + htCloseTime) / 2, htHigh)
+                line.set_xy2(array.get(refWicks, 1), (htTime + htCloseTime) / 2, bodyHigh)
+                line.set_color(array.get(refWicks, 1), wickColor)
+                line.set_xy1(array.get(refWicks, 0), (htTime + htCloseTime) / 2, bodyLow)
+                line.set_xy2(array.get(refWicks, 0), (htTime + htCloseTime) / 2, htLow)
+                line.set_color(array.get(refWicks, 0), wickColor)
+
+        if array.size(refBodies) > maxCandles
+            box.delete(array.pop(refBodies))
+        if array.size(refWicks) > maxCandles * 2
+            line.delete(array.pop(refWicks))
+            line.delete(array.pop(refWicks))
+
+// ---------------------
+// INPUTS — Slot 1 (padrão 1W)
+// ---------------------
+tf1           = input.timeframe("W", "Timeframe do slot", group = "① Slot 1")
+show1         = input.bool(true, "Mostrar", group = "① Slot 1")
+showFrom_1    = input.timeframe("1", "Mostrar a partir de (TF do gráfico)", group = "① Slot 1")
+showTo_1      = input.timeframe("D", "Mostrar até (TF do gráfico)", group = "① Slot 1")
+maxCandles_1  = input.int(50, "Máximo de candles", minval = 1, group = "① Slot 1")
+bodyBull_1    = input.color(color.new(#1b5e20, 80), "Corpo alta", inline = "c1", group = "① Slot 1")
+bodyBear_1    = input.color(color.new(#801922, 80), "Corpo baixa", inline = "c1", group = "① Slot 1")
+borderBull_1  = input.color(color.new(#1b5e20, 100), "Borda alta", inline = "b1", group = "① Slot 1")
+borderBear_1  = input.color(color.new(#801922, 100), "Borda baixa", inline = "b1", group = "① Slot 1")
+borderW_1     = input.int(2, "Espessura borda", minval = 1, maxval = 5, group = "① Slot 1")
+wickBull_1    = input.color(color.new(#1b5e20, 80), "Pavio alta", inline = "w1", group = "① Slot 1")
+wickBear_1    = input.color(color.new(#801922, 80), "Pavio baixa", inline = "w1", group = "① Slot 1")
+wickW_1       = input.int(1, "Espessura pavio", minval = 1, maxval = 5, group = "① Slot 1")
+
+// ---------------------
+// INPUTS — Slot 2 (padrão 1D)
+// ---------------------
+tf2           = input.timeframe("D", "Timeframe do slot", group = "② Slot 2")
+show2         = input.bool(true, "Mostrar", group = "② Slot 2")
+showFrom_2    = input.timeframe("1", "Mostrar a partir de (TF do gráfico)", group = "② Slot 2")
+showTo_2      = input.timeframe("240", "Mostrar até (TF do gráfico)", group = "② Slot 2")
+maxCandles_2  = input.int(50, "Máximo de candles", minval = 1, group = "② Slot 2")
+bodyBull_2    = input.color(color.new(#2e7d32, 80), "Corpo alta", inline = "c2", group = "② Slot 2")
+bodyBear_2    = input.color(color.new(#b71c1c, 80), "Corpo baixa", inline = "c2", group = "② Slot 2")
+borderBull_2  = input.color(color.new(#2e7d32, 100), "Borda alta", inline = "b2", group = "② Slot 2")
+borderBear_2  = input.color(color.new(#b71c1c, 100), "Borda baixa", inline = "b2", group = "② Slot 2")
+borderW_2     = input.int(2, "Espessura borda", minval = 1, maxval = 5, group = "② Slot 2")
+wickBull_2    = input.color(color.new(#2e7d32, 80), "Pavio alta", inline = "w2", group = "② Slot 2")
+wickBear_2    = input.color(color.new(#b71c1c, 80), "Pavio baixa", inline = "w2", group = "② Slot 2")
+wickW_2       = input.int(1, "Espessura pavio", minval = 1, maxval = 5, group = "② Slot 2")
+
+// ---------------------
+// INPUTS — Slot 3 (padrão 1H)
+// ---------------------
+tf3           = input.timeframe("60", "Timeframe do slot", group = "③ Slot 3")
+show3         = input.bool(true, "Mostrar", group = "③ Slot 3")
+showFrom_3    = input.timeframe("1", "Mostrar a partir de (TF do gráfico)", group = "③ Slot 3")
+showTo_3      = input.timeframe("45", "Mostrar até (TF do gráfico)", group = "③ Slot 3")
+maxCandles_3  = input.int(50, "Máximo de candles", minval = 1, group = "③ Slot 3")
+bodyBull_3    = input.color(color.new(#1565c0, 80), "Corpo alta", inline = "c3", group = "③ Slot 3")
+bodyBear_3    = input.color(color.new(#b71c1c, 80), "Corpo baixa", inline = "c3", group = "③ Slot 3")
+borderBull_3  = input.color(color.new(#1565c0, 100), "Borda alta", inline = "b3", group = "③ Slot 3")
+borderBear_3  = input.color(color.new(#b71c1c, 100), "Borda baixa", inline = "b3", group = "③ Slot 3")
+borderW_3     = input.int(2, "Espessura borda", minval = 1, maxval = 5, group = "③ Slot 3")
+wickBull_3    = input.color(color.new(#1565c0, 80), "Pavio alta", inline = "w3", group = "③ Slot 3")
+wickBear_3    = input.color(color.new(#b71c1c, 80), "Pavio baixa", inline = "w3", group = "③ Slot 3")
+wickW_3       = input.int(1, "Espessura pavio", minval = 1, maxval = 5, group = "③ Slot 3")
+
+// ---------------------
+// INPUTS — Slot 4 (padrão 15m)
+// ---------------------
+tf4           = input.timeframe("15", "Timeframe do slot", group = "④ Slot 4")
+show4         = input.bool(true, "Mostrar", group = "④ Slot 4")
+showFrom_4    = input.timeframe("1", "Mostrar a partir de (TF do gráfico)", group = "④ Slot 4")
+showTo_4      = input.timeframe("5", "Mostrar até (TF do gráfico)", group = "④ Slot 4")
+maxCandles_4  = input.int(50, "Máximo de candles", minval = 1, group = "④ Slot 4")
+bodyBull_4    = input.color(color.new(#6a1b9a, 80), "Corpo alta", inline = "c4", group = "④ Slot 4")
+bodyBear_4    = input.color(color.new(#b71c1c, 80), "Corpo baixa", inline = "c4", group = "④ Slot 4")
+borderBull_4  = input.color(color.new(#6a1b9a, 100), "Borda alta", inline = "b4", group = "④ Slot 4")
+borderBear_4  = input.color(color.new(#b71c1c, 100), "Borda baixa", inline = "b4", group = "④ Slot 4")
+borderW_4     = input.int(2, "Espessura borda", minval = 1, maxval = 5, group = "④ Slot 4")
+wickBull_4    = input.color(color.new(#6a1b9a, 80), "Pavio alta", inline = "w4", group = "④ Slot 4")
+wickBear_4    = input.color(color.new(#b71c1c, 80), "Pavio baixa", inline = "w4", group = "④ Slot 4")
+wickW_4       = input.int(1, "Espessura pavio", minval = 1, maxval = 5, group = "④ Slot 4")
+
+// ---------------------
+// INPUTS — Slot 5 (padrão 5m)
+// ---------------------
+tf5           = input.timeframe("5", "Timeframe do slot", group = "⑤ Slot 5")
+show5         = input.bool(true, "Mostrar", group = "⑤ Slot 5")
+showFrom_5    = input.timeframe("1", "Mostrar a partir de (TF do gráfico)", group = "⑤ Slot 5")
+showTo_5      = input.timeframe("4", "Mostrar até (TF do gráfico)", group = "⑤ Slot 5")
+maxCandles_5  = input.int(50, "Máximo de candles", minval = 1, group = "⑤ Slot 5")
+bodyBull_5    = input.color(color.new(#f57c00, 80), "Corpo alta", inline = "c5", group = "⑤ Slot 5")
+bodyBear_5    = input.color(color.new(#b71c1c, 80), "Corpo baixa", inline = "c5", group = "⑤ Slot 5")
+borderBull_5  = input.color(color.new(#f57c00, 100), "Borda alta", inline = "b5", group = "⑤ Slot 5")
+borderBear_5  = input.color(color.new(#b71c1c, 100), "Borda baixa", inline = "b5", group = "⑤ Slot 5")
+borderW_5     = input.int(2, "Espessura borda", minval = 1, maxval = 5, group = "⑤ Slot 5")
+wickBull_5    = input.color(color.new(#f57c00, 80), "Pavio alta", inline = "w5", group = "⑤ Slot 5")
+wickBear_5    = input.color(color.new(#b71c1c, 80), "Pavio baixa", inline = "w5", group = "⑤ Slot 5")
+wickW_5       = input.int(1, "Espessura pavio", minval = 1, maxval = 5, group = "⑤ Slot 5")
+
+// ---------------------
+// Arrays globais por slot
+// ---------------------
+var box[] bodies1 = array.new_box()
+var line[] wicks1 = array.new_line()
+var box[] bodies2 = array.new_box()
+var line[] wicks2 = array.new_line()
+var box[] bodies3 = array.new_box()
+var line[] wicks3 = array.new_line()
+var box[] bodies4 = array.new_box()
+var line[] wicks4 = array.new_line()
+var box[] bodies5 = array.new_box()
+var line[] wicks5 = array.new_line()
+
+// ---------------------
+// Chamadas por slot
+// ---------------------
+f_drawTf(tf1, show1, showFrom_1, showTo_1, maxCandles_1, bodyBull_1, bodyBear_1, borderBull_1, borderBear_1, borderW_1, wickBull_1, wickBear_1, wickW_1, bodies1, wicks1)
+f_drawTf(tf2, show2, showFrom_2, showTo_2, maxCandles_2, bodyBull_2, bodyBear_2, borderBull_2, borderBear_2, borderW_2, wickBull_2, wickBear_2, wickW_2, bodies2, wicks2)
+f_drawTf(tf3, show3, showFrom_3, showTo_3, maxCandles_3, bodyBull_3, bodyBear_3, borderBull_3, borderBear_3, borderW_3, wickBull_3, wickBear_3, wickW_3, bodies3, wicks3)
+f_drawTf(tf4, show4, showFrom_4, showTo_4, maxCandles_4, bodyBull_4, bodyBear_4, borderBull_4, borderBear_4, borderW_4, wickBull_4, wickBear_4, wickW_4, bodies4, wicks4)
+f_drawTf(tf5, show5, showFrom_5, showTo_5, maxCandles_5, bodyBull_5, bodyBear_5, borderBull_5, borderBear_5, borderW_5, wickBull_5, wickBear_5, wickW_5, bodies5, wicks5)
